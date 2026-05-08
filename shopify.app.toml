@@ -1,29 +1,20 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "YOUR_CLIENT_ID"
+client_id = "5c307ad556bb499314edfd281ab20290"
 name = "shop-chat-agent"
-handle = "shop-chat-agent"
 application_url = "https://shop-chat-agent.com"
 embedded = true
 
-[build]
-include_config_on_deploy = true
-
-[webhooks]
-api_version = "2025-04"
-
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-# Add following additional scopes when configuring customer accounts authentication: customer_read_customers,customer_read_orders,customer_read_store_credit_account_transactions,customer_read_store_credit_accounts
 scopes = "unauthenticated_read_product_listings"
 
 [auth]
 redirect_urls = [ "https://shop-chat-agent.com/api/auth" ]
 
-[pos]
-embedded = false
+[webhooks]
+api_version = "2026-07"
 
-[customer_authentication]
-redirect_uris = [
-  "https://shop-chat-agent.com/callback"
-]
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
