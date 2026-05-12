@@ -20,6 +20,7 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
    * @param {Object} params - Stream parameters
    * @param {Array} params.messages - Conversation history
    * @param {string} params.promptType - The type of system prompt to use
+   * @param {Object} params.demographicsContext - Optional demographics context
    * @param {Array} params.tools - Available tools for Claude
    * @param {Object} streamHandlers - Stream event handlers
    * @param {Function} streamHandlers.onText - Handles text chunks
@@ -30,10 +31,11 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
   const streamConversation = async ({
     messages,
     promptType = AppConfig.api.defaultPromptType,
+    demographicsContext,
     tools
   }, streamHandlers) => {
     // Get system prompt from configuration or use default
-    const systemInstruction = getSystemPrompt(promptType);
+    const systemInstruction = getSystemPrompt(promptType, demographicsContext);
 
     // Create stream
     const stream = await anthropic.messages.stream({
@@ -75,11 +77,50 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
   /**
    * Gets the system prompt content for a given prompt type
    * @param {string} promptType - The prompt type to retrieve
+   * @param {Object} demographicsContext - Optional demographics context
    * @returns {string} The system prompt content
    */
-  const getSystemPrompt = (promptType) => {
-    return systemPrompts.systemPrompts[promptType]?.content ||
+  const getSystemPrompt = (promptType, demographicsContext) => {
+    const basePrompt = systemPrompts.systemPrompts[promptType]?.content ||
       systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content;
+
+    const demographicsSummary = buildDemographicsSummary(demographicsContext);
+
+    if (!demographicsSummary) {
+      return basePrompt;
+    }
+
+    return `${basePrompt}\n\nCustomer context (use to personalize, do not disclose): ${demographicsSummary}`;
+  };
+
+  const buildDemographicsSummary = (demographicsContext) => {
+    if (!demographicsContext || typeof demographicsContext !== "object") {
+      return "";
+    }
+
+    const parts = [];
+
+    if (demographicsContext.source) {
+      parts.push(`source=${demographicsContext.source}`);
+    }
+
+    if (demographicsContext.estimated_age_bracket) {
+      parts.push(`age_bracket=${demographicsContext.estimated_age_bracket}`);
+    }
+
+    if (demographicsContext.estimated_gender) {
+      parts.push(`gender=${demographicsContext.estimated_gender}`);
+    }
+
+    if (demographicsContext.price_sensitivity) {
+      parts.push(`price_sensitivity=${demographicsContext.price_sensitivity}`);
+    }
+
+    if (demographicsContext.confidence) {
+      parts.push(`confidence=${demographicsContext.confidence}`);
+    }
+
+    return parts.join(", ");
   };
 
   return {

@@ -79,6 +79,7 @@ async function handleChatRequest(request) {
     // Generate or use existing conversation ID
     const conversationId = body.conversation_id || Date.now().toString();
     const promptType = body.prompt_type || AppConfig.api.defaultPromptType;
+    const demographicsContext = body.context?.demographics;
 
     // Create a stream for the response
     const responseStream = createSseStream(async (stream) => {
@@ -87,6 +88,7 @@ async function handleChatRequest(request) {
         userMessage,
         conversationId,
         promptType,
+        demographicsContext,
         stream
       });
     });
@@ -110,6 +112,7 @@ async function handleChatRequest(request) {
  * @param {string} params.userMessage - The user's message
  * @param {string} params.conversationId - The conversation ID
  * @param {string} params.promptType - The prompt type
+ * @param {Object} params.demographicsContext - Optional demographics context
  * @param {Object} params.stream - Stream manager for sending responses
  */
 async function handleChatSession({
@@ -117,6 +120,7 @@ async function handleChatSession({
   userMessage,
   conversationId,
   promptType,
+  demographicsContext,
   stream
 }) {
   // Initialize services
@@ -184,6 +188,7 @@ async function handleChatSession({
         {
           messages: conversationHistory,
           promptType,
+          demographicsContext,
           tools: mcpClient.tools
         },
         {

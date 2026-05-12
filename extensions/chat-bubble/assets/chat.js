@@ -11,6 +11,74 @@
    * Application namespace to prevent global scope pollution
    */
   const ShopAIChat = {
+    resolvedApiBaseUrl: null,
+
+    getApiBaseUrl: function() {
+      const configuredBaseUrl = window.shopChatConfig?.apiBaseUrl?.trim();
+
+      // Prefer explicit configuration for storefront usage. Fallback keeps local demos working.
+      if (configuredBaseUrl) {
+        if (configuredBaseUrl.startsWith('http://') || configuredBaseUrl.startsWith('https://')) {
+          return configuredBaseUrl.replace(/\/$/, '');
+        }
+
+        if (configuredBaseUrl.startsWith('/')) {
+          return `${window.location.origin}${configuredBaseUrl}`.replace(/\/$/, '');
+        }
+      }
+
+      return 'https://localhost:3458';
+    },
+
+    getApiBaseCandidates: function() {
+      const configuredBaseUrl = this.getApiBaseUrl();
+      const candidates = [];
+
+      if (configuredBaseUrl) {
+        candidates.push(configuredBaseUrl);
+      }
+
+      // Shopify app proxy fallback on the storefront origin.
+      candidates.push(`${window.location.origin}/apps/shop-chat-agent`);
+      candidates.push('https://localhost:3458');
+
+      return [...new Set(candidates.map((url) => url.replace(/\/$/, '')))];
+    },
+
+    buildApiUrl: function(path, baseUrl) {
+      const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      const effectiveBaseUrl = baseUrl || this.getApiBaseUrl();
+      return `${effectiveBaseUrl}${normalizedPath}`;
+    },
+
+    fetchFromApi: async function(path, options) {
+      const baseCandidates = this.resolvedApiBaseUrl
+        ? [this.resolvedApiBaseUrl, ...this.getApiBaseCandidates()]
+        : this.getApiBaseCandidates();
+      const candidates = [...new Set(baseCandidates)];
+
+      let lastError = null;
+
+      for (const baseUrl of candidates) {
+        const url = this.buildApiUrl(path, baseUrl);
+
+        try {
+          const response = await fetch(url, options);
+
+          if (response.ok) {
+            this.resolvedApiBaseUrl = baseUrl;
+            return { response, url };
+          }
+
+          lastError = new Error(`Request failed with status ${response.status} for ${url}`);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Failed to reach chat API');
+    },
+
     /**
      * UI-related elements and functionality
      */
@@ -32,6 +100,8 @@
           chatWindow: container.querySelector('.shop-ai-chat-window'),
           closeButton: container.querySelector('.shop-ai-chat-close'),
           chatInput: container.querySelector('.shop-ai-chat-input input'),
+          voiceStatus: container.querySelector('.shop-ai-voice-status'),
+          voiceButton: container.querySelector('.shop-ai-chat-voice'),
           sendButton: container.querySelector('.shop-ai-chat-send'),
           messagesContainer: container.querySelector('.shop-ai-chat-messages')
         };
@@ -52,7 +122,7 @@
        * Set up all event listeners for UI interactions
        */
       setupEventListeners: function() {
-        const { chatBubble, closeButton, chatInput, sendButton, messagesContainer } = this.elements;
+        const { chatBubble, closeButton, chatInput, voiceButton, sendButton, messagesContainer } = this.elements;
 
         // Toggle chat window visibility
         chatBubble.addEventListener('click', () => this.toggleChatWindow());
@@ -84,6 +154,13 @@
             }
           }
         });
+
+        // Start/stop voice input
+        if (voiceButton) {
+          voiceButton.addEventListener('click', () => {
+            ShopAIChat.Voice.toggle(chatInput, messagesContainer);
+          });
+        }
 
         // Handle window resize to adjust scrolling
         window.addEventListener('resize', () => this.scrollToBottom());
@@ -141,6 +218,8 @@
         const { chatWindow, chatInput } = this.elements;
 
         chatWindow.classList.remove('active');
+        ShopAIChat.Voice.stop();
+        this.setVoiceStatus('');
 
         // On mobile, blur input to hide keyboard and enable body scrolling
         if (this.isMobile) {
@@ -182,6 +261,23 @@
         if (typingIndicator) {
           typingIndicator.remove();
         }
+      },
+
+      setVoiceStatus: function(text) {
+        const { voiceStatus } = this.elements;
+
+        if (!voiceStatus) {
+          return;
+        }
+
+        if (!text) {
+          voiceStatus.textContent = '';
+          voiceStatus.classList.remove('active');
+          return;
+        }
+
+        voiceStatus.textContent = text;
+        voiceStatus.classList.add('active');
       },
 
       /**
@@ -231,10 +327,15 @@
        * Send a message to the API
        * @param {HTMLInputElement} chatInput - The input element
        * @param {HTMLElement} messagesContainer - The messages container
+       * @param {Object} options - Optional send options
        */
-      send: async function(chatInput, messagesContainer) {
-        const userMessage = chatInput.value.trim();
+      send: async function(chatInput, messagesContainer, options = {}) {
+        const userMessage = (options.message || chatInput.value || '').trim();
         const conversationId = sessionStorage.getItem('shopAiConversationId');
+
+        if (!userMessage) {
+          return;
+        }
 
         // Add user message to chat
         this.add(userMessage, 'user', messagesContainer);
@@ -246,7 +347,7 @@
         ShopAIChat.UI.showTypingIndicator();
 
         try {
-          ShopAIChat.API.streamResponse(userMessage, conversationId, messagesContainer);
+          ShopAIChat.API.streamResponse(userMessage, conversationId, messagesContainer, options.context);
         } catch (error) {
           console.error('Error communicating with Claude API:', error);
           ShopAIChat.UI.removeTypingIndicator();
@@ -353,6 +454,305 @@
     },
 
     /**
+     * Browser voice input using Web Speech API
+     */
+    Voice: {
+      recognition: null,
+      isRecording: false,
+
+      getLabels: function() {
+        return window.shopChatConfig?.voiceLabels || {};
+      },
+
+      getRecognitionConstructor: function() {
+        return window.SpeechRecognition || window.webkitSpeechRecognition;
+      },
+
+      isSupported: function() {
+        return Boolean(this.getRecognitionConstructor());
+      },
+
+      toggle: function(chatInput, messagesContainer) {
+        if (this.isRecording || ShopAIChat.VoiceAnalysis.isRecording) {
+          this.stop();
+          return;
+        }
+
+        this.start(chatInput, messagesContainer);
+      },
+
+      start: function(chatInput, messagesContainer) {
+        // Route to server-side pipeline when voice analysis is enabled
+        if (window.shopChatConfig?.voiceAnalysisEnabled) {
+          ShopAIChat.VoiceAnalysis.start(chatInput, messagesContainer);
+          return;
+        }
+
+        const RecognitionCtor = this.getRecognitionConstructor();
+        const labels = this.getLabels();
+
+        if (!RecognitionCtor) {
+          ShopAIChat.Message.add(
+            labels.voiceUnsupported || 'Voice input is not supported in this browser. Try Chrome, Edge, or Safari and ensure HTTPS.',
+            'assistant',
+            messagesContainer
+          );
+          return;
+        }
+
+        if (!this.recognition) {
+          this.recognition = new RecognitionCtor();
+          this.recognition.lang = 'en-US';
+          this.recognition.continuous = false;
+          this.recognition.interimResults = false;
+          this.recognition.maxAlternatives = 1;
+
+          this.recognition.onstart = () => {
+            this.isRecording = true;
+            this.updateButtonState(true);
+            ShopAIChat.UI.setVoiceStatus(labels.voiceListening || 'Listening...');
+          };
+
+          this.recognition.onresult = (event) => {
+            const transcript = event.results?.[0]?.[0]?.transcript?.trim();
+
+            if (!transcript) {
+              ShopAIChat.Message.add(labels.voiceNoSpeech || "I couldn't hear anything. Please try again.", 'assistant', messagesContainer);
+              return;
+            }
+
+            chatInput.value = transcript;
+            ShopAIChat.Message.send(chatInput, messagesContainer);
+          };
+
+          this.recognition.onnomatch = () => {
+            ShopAIChat.Message.add(
+              labels.voiceNoSpeech || "I couldn't understand that. Please try speaking more clearly.",
+              'assistant',
+              messagesContainer
+            );
+          };
+
+          this.recognition.onerror = (event) => {
+            if (event.error === 'no-speech') {
+              ShopAIChat.Message.add(labels.voiceNoSpeech || "I couldn't hear anything. Please try again.", 'assistant', messagesContainer);
+            } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+              ShopAIChat.Message.add('Microphone access is blocked. Allow microphone permission in your browser settings, then try again.', 'assistant', messagesContainer);
+            } else if (event.error === 'audio-capture') {
+              ShopAIChat.Message.add('No microphone was detected. Check your mic connection and system input device.', 'assistant', messagesContainer);
+            } else if (event.error === 'network') {
+              ShopAIChat.Message.add('Speech recognition network error. Check your internet connection and try again.', 'assistant', messagesContainer);
+            } else if (event.error !== 'aborted') {
+              ShopAIChat.Message.add(`Voice input failed (${event.error || 'unknown error'}). Please try again.`, 'assistant', messagesContainer);
+            }
+          };
+
+          this.recognition.onend = () => {
+            this.isRecording = false;
+            this.updateButtonState(false);
+            ShopAIChat.UI.setVoiceStatus('');
+          };
+        }
+
+        this.isRecording = true;
+        this.updateButtonState(true);
+
+        try {
+          this.recognition.start();
+        } catch (error) {
+          this.isRecording = false;
+          this.updateButtonState(false);
+          ShopAIChat.UI.setVoiceStatus('');
+          ShopAIChat.Message.add('Voice input failed to start. Please try again.', 'assistant', messagesContainer);
+        }
+      },
+
+      stop: function() {
+        if (this.recognition && this.isRecording) {
+          this.recognition.stop();
+        }
+        ShopAIChat.VoiceAnalysis.stop();
+      },
+
+      updateButtonState: function(isRecording) {
+        const voiceButton = ShopAIChat.UI.elements.voiceButton;
+        const labels = this.getLabels();
+
+        if (!voiceButton) {
+          return;
+        }
+
+        voiceButton.classList.toggle('recording', isRecording);
+
+        const buttonLabel = isRecording
+          ? (labels.voiceButtonRecording || 'Stop voice input')
+          : (labels.voiceButton || 'Use voice input');
+
+        voiceButton.setAttribute('title', buttonLabel);
+        voiceButton.setAttribute('aria-label', buttonLabel);
+      }
+    },
+
+    /**
+     * Server-side voice analysis using MediaRecorder + /api/transcribe.
+     * Used when window.shopChatConfig.voiceAnalysisEnabled === true.
+     * Falls back to a no-op if MediaRecorder is unavailable.
+     */
+    VoiceAnalysis: {
+      mediaRecorder: null,
+      audioChunks: [],
+      isRecording: false,
+      CONSENT_KEY: 'shopAiVoiceAnalysisConsent',
+
+      hasConsent: function() {
+        try {
+          return localStorage.getItem(this.CONSENT_KEY) === 'true';
+        } catch {
+          return false;
+        }
+      },
+
+      saveConsent: function() {
+        try { localStorage.setItem(this.CONSENT_KEY, 'true'); } catch { /* ignore */ }
+      },
+
+      isSupported: function() {
+        return typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+      },
+
+      start: function(chatInput, messagesContainer) {
+        if (!this.isSupported()) {
+          ShopAIChat.Message.add(
+            'Server-side voice analysis requires a browser with MediaRecorder support.',
+            'assistant', messagesContainer
+          );
+          return;
+        }
+
+        if (!this.hasConsent()) {
+          this._requestConsent(chatInput, messagesContainer);
+          return;
+        }
+
+        this._beginRecording(chatInput, messagesContainer);
+      },
+
+      stop: function() {
+        if (this.mediaRecorder && this.isRecording) {
+          this.mediaRecorder.stop();
+        }
+      },
+
+      _requestConsent: function(chatInput, messagesContainer) {
+        const notice = document.createElement('div');
+        notice.classList.add('shop-ai-message', 'assistant', 'shop-ai-voice-consent');
+        notice.innerHTML =
+          '<p>Your voice will be analyzed to personalize your experience (speech-to-text and optional demographic signals). ' +
+          'No raw audio is stored.</p>' +
+          '<button class="shop-ai-consent-allow">Allow</button>' +
+          '<button class="shop-ai-consent-deny">No thanks</button>';
+        messagesContainer.appendChild(notice);
+        ShopAIChat.UI.scrollToBottom();
+
+        notice.querySelector('.shop-ai-consent-allow').addEventListener('click', () => {
+          notice.remove();
+          this.saveConsent();
+          this._beginRecording(chatInput, messagesContainer);
+        });
+
+        notice.querySelector('.shop-ai-consent-deny').addEventListener('click', () => {
+          notice.remove();
+          ShopAIChat.Message.add("No problem — you can still type your questions.", 'assistant', messagesContainer);
+        });
+      },
+
+      _beginRecording: async function(chatInput, messagesContainer) {
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (err) {
+          let msg;
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            msg = 'Microphone access is blocked. In Safari: tap the website settings (AA) in the address bar → Microphone → Allow, then reload the page.';
+          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            msg = 'No microphone detected. Check your mic connection and try again.';
+          } else if (err.name === 'SecurityError') {
+            msg = 'Microphone access requires a secure (HTTPS) connection.';
+          } else {
+            msg = `Microphone error (${err.name}): ${err.message}. Please try again or type your message.`;
+          }
+          ShopAIChat.Message.add(msg, 'assistant', messagesContainer);
+          return;
+        }
+
+        this.audioChunks = [];
+        this.mediaRecorder = new MediaRecorder(stream);
+        this.isRecording = true;
+        ShopAIChat.Voice.updateButtonState(true);
+        ShopAIChat.UI.setVoiceStatus('Listening...');
+
+        this.mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) this.audioChunks.push(e.data);
+        };
+
+        this.mediaRecorder.onstop = async () => {
+          this.isRecording = false;
+          ShopAIChat.Voice.updateButtonState(false);
+          ShopAIChat.UI.setVoiceStatus('Processing...');
+
+          stream.getTracks().forEach(t => t.stop());
+
+          const mimeType = this.mediaRecorder.mimeType || 'audio/webm';
+          const audioBlob = new Blob(this.audioChunks, { type: mimeType });
+
+          if (audioBlob.size === 0) {
+            ShopAIChat.UI.setVoiceStatus('');
+            ShopAIChat.Message.add("No audio captured. Please try again.", 'assistant', messagesContainer);
+            return;
+          }
+
+          await this._sendToTranscribe(audioBlob, mimeType, chatInput, messagesContainer);
+        };
+
+        this.mediaRecorder.start();
+      },
+
+      _sendToTranscribe: async function(audioBlob, mimeType, chatInput, messagesContainer) {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'audio.webm');
+
+        try {
+          const { response } = await ShopAIChat.fetchFromApi('/api/transcribe', {
+            method: 'POST',
+            body: formData,
+          });
+
+          ShopAIChat.UI.setVoiceStatus('');
+
+          if (!response.ok) {
+            ShopAIChat.Message.add('Voice transcription failed. Please try typing instead.', 'assistant', messagesContainer);
+            return;
+          }
+
+          const { transcript, demographics } = await response.json();
+
+          if (!transcript || transcript.trim() === '') {
+            ShopAIChat.Message.add("I couldn't hear anything. Please try again.", 'assistant', messagesContainer);
+            return;
+          }
+
+          chatInput.value = transcript;
+
+          const context = demographics ? { demographics } : undefined;
+          ShopAIChat.Message.send(chatInput, messagesContainer, { message: transcript, context });
+        } catch (err) {
+          ShopAIChat.UI.setVoiceStatus('');
+          ShopAIChat.Message.add('Voice transcription failed. Please try typing instead.', 'assistant', messagesContainer);
+        }
+      }
+    },
+
+    /**
      * Text formatting and markdown handling
      */
     Formatting: {
@@ -411,7 +811,7 @@
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
           const unorderedMatch = line.match(/^\s*([-*])\s+(.*)/);
-          const orderedMatch = line.match(/^\s*(\d+)[\.)]\s+(.*)/);
+          const orderedMatch = line.match(/^\s*(\d+)[.)]\s+(.*)/);
 
           if (unorderedMatch) {
             if (currentList !== 'ul') {
@@ -470,21 +870,26 @@
        * @param {string} conversationId - Conversation ID for context
        * @param {HTMLElement} messagesContainer - The messages container
        */
-      streamResponse: async function(userMessage, conversationId, messagesContainer) {
+      streamResponse: async function(userMessage, conversationId, messagesContainer, context) {
         let currentMessageElement = null;
 
         try {
           const promptType = window.shopChatConfig?.promptType || "standardAssistant";
-          const requestBody = JSON.stringify({
+          const requestPayload = {
             message: userMessage,
             conversation_id: conversationId,
             prompt_type: promptType
-          });
+          };
 
-          const streamUrl = 'https://localhost:3458/chat';
+          if (context && typeof context === 'object') {
+            requestPayload.context = context;
+          }
+
+          const requestBody = JSON.stringify(requestPayload);
+
           const shopId = window.shopId;
 
-          const response = await fetch(streamUrl, {
+          const { response, url } = await ShopAIChat.fetchFromApi('/chat', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -493,6 +898,12 @@
             },
             body: requestBody
           });
+
+          if (!response.ok || !response.body) {
+            throw new Error(`Chat request failed (${response.status})`);
+          }
+
+          console.log('Connected to chat API:', url);
 
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
@@ -507,7 +918,7 @@
           currentMessageElement = messageElement;
 
           // Process the stream
-          while (true) {
+          for (;;) {
             const { value, done } = await reader.read();
             if (done) break;
 
@@ -530,7 +941,7 @@
         } catch (error) {
           console.error('Error in streaming:', error);
           ShopAIChat.UI.removeTypingIndicator();
-          ShopAIChat.Message.add("Sorry, I couldn't process your request. Please try again later.",
+          ShopAIChat.Message.add("Sorry, I couldn't reach the chat service. Verify the Chat API Base URL in the theme app extension settings.",
             'assistant', messagesContainer);
         }
       },
@@ -595,7 +1006,7 @@
             }
             break;
 
-          case 'new_message':
+          case 'new_message': {
             ShopAIChat.Formatting.formatMessageContent(currentMessageElement);
             ShopAIChat.UI.showTypingIndicator();
 
@@ -609,6 +1020,7 @@
             // Update the current element reference
             updateCurrentElement(newMessageElement);
             break;
+          }
 
           case 'content_block_complete':
             ShopAIChat.UI.showTypingIndicator();
@@ -630,10 +1042,8 @@
           messagesContainer.appendChild(loadingMessage);
 
           // Fetch history from the server
-          const historyUrl = `https://localhost:3458/chat?history=true&conversation_id=${encodeURIComponent(conversationId)}`;
-          console.log('Fetching history from:', historyUrl);
-
-          const response = await fetch(historyUrl, {
+          const historyPath = `/chat?history=true&conversation_id=${encodeURIComponent(conversationId)}`;
+          const { response, url: historyUrl } = await ShopAIChat.fetchFromApi(historyPath, {
             method: 'GET',
             headers: {
               'Accept': 'application/json',
@@ -641,6 +1051,8 @@
             },
             mode: 'cors'
           });
+
+          console.log('Fetching history from:', historyUrl);
 
           if (!response.ok) {
             console.error('History fetch failed:', response.status, response.statusText);
@@ -779,9 +1191,10 @@
           attemptCount++;
 
           try {
-            const tokenUrl = 'https://localhost:3458/auth/token-status?conversation_id=' +
-              encodeURIComponent(conversationId);
-            const response = await fetch(tokenUrl);
+            const tokenPath = `/auth/token-status?conversation_id=${encodeURIComponent(conversationId)}`;
+            const { response } = await ShopAIChat.fetchFromApi(tokenPath, {
+              method: 'GET'
+            });
 
             if (!response.ok) {
               throw new Error('Token status check failed: ' + response.status);
@@ -910,6 +1323,14 @@
       if (!container) return;
 
       this.UI.init(container);
+
+      const voiceButton = this.UI.elements.voiceButton;
+      if (voiceButton) {
+        if (!this.Voice.isSupported()) {
+          voiceButton.classList.add('unsupported');
+        }
+        this.Voice.updateButtonState(false);
+      }
 
       // Check for existing conversation
       const conversationId = sessionStorage.getItem('shopAiConversationId');

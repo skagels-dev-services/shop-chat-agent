@@ -12,10 +12,12 @@ A Shopify template app that lets you embed an AI-powered chat widget on your sto
   - Track orders and initiate returns
 
 ## Developer Docs
-- Everything from installation to deep dives lives on https://shopify.dev/docs/apps/build/storefront-mcp.
+
+- Everything from installation to deep dives lives on [https://shopify.dev/docs/apps/build/storefront-mcp]().
 - Clone this repo and follow the instructions on the dev docs.
 
 ## Examples
+
 - `hi` > will return a LLM based response. Note that you can customize the LLM call with your own prompt.
 - `can you search for snowboards` > will use the `search_shop_catalog` MCP tool.
 - `add The Videographer Snowboard to my cart` > will use the `update_cart` MCP tool and offer a checkout URL.
@@ -29,12 +31,14 @@ A Shopify template app that lets you embed an AI-powered chat widget on your sto
 ## Architecture
 
 ### Components
+
 This app consists of two main components:
 
 1. **Backend**: A React Router app server that handles communication with Claude, processes chat messages, and acts as an MCP Client.
 2. **Chat UI**: A Shopify theme extension that provides the customer-facing chat interface.
 
 When you start the app, it will:
+
 - Start React Router in development mode.
 - Tunnel your local server so Shopify can reach it.
 - Provide a preview URL to install the app on your development store.
@@ -42,18 +46,22 @@ When you start the app, it will:
 For direct testing, point your test suite at the `/chat` endpoint (GET or POST for streaming).
 
 ### MCP Tools Integration
+
 - The backend already initializes all Shopify MCP tools—see [`app/mcp-client.js`](./app/mcp-client.js).
 - These tools let your LLM invoke product search, cart actions, order lookups, etc.
 - More in our [dev docs](https://shopify.dev/docs/apps/build/storefront-mcp).
 
 ### Tech Stack
+
 - **Framework**: [React Router](https://reactrouter.com/)
 - **AI**: [Claude by Anthropic](https://www.anthropic.com/claude)
 - **Shopify Integration**: [@shopify/shopify-app-react-router](https://www.npmjs.com/package/@shopify/shopify-app-react-router)
 - **Database**: SQLite (via Prisma) for session storage
 
 ## Customizations
+
 This repo can be customized. You can:
+
 - Edit the prompt
 - Change the chat widget UI
 - Swap out the LLM
@@ -61,7 +69,9 @@ This repo can be customized. You can:
 You can learn how from our [dev docs](https://shopify.dev/docs/apps/build/storefront-mcp).
 
 ## Deployment
+
 Follow standard Shopify app deployment procedures as outlined in the [Shopify documentation](https://shopify.dev/docs/apps/deployment/web).
 
 ## Contributing
+
 We appreciate your interest in contributing to this project. As this is an example repository intended for educational and reference purposes, we are not accepting contributions.

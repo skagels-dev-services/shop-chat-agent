@@ -3,6 +3,11 @@
     "title": "Store Assistant",
     "inputPlaceholder": "Type your message here...",
     "sendButton": "Send",
-    "closeButton": "Close"
+    "closeButton": "Close",
+    "voiceButton": "Use voice input",
+    "voiceButtonRecording": "Stop voice input",
+    "voiceUnsupported": "Voice input is not supported in this browser.",
+    "voiceNoSpeech": "I couldn't hear anything. Please try again.",
+    "voiceListening": "Listening..."
   }
 }
