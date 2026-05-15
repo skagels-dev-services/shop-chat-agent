@@ -337,6 +337,28 @@
           return;
         }
 
+        // "new chat" exact match → start a new session immediately, no server call
+        if (/^new chat$/i.test(userMessage)) {
+          chatInput.value = '';
+          ShopAIChat.Session.startNewSession(messagesContainer);
+          return;
+        }
+
+        // "new chat" embedded in a longer message → ask for clarification
+        if (/\bnew chat\b/i.test(userMessage)) {
+          ShopAIChat.Session.showNewChatClarification(userMessage, chatInput, messagesContainer);
+          return;
+        }
+
+        // "test session timeout" forces the timeout confirmation UI for manual testing
+        const forceTimeout = userMessage.toLowerCase() === 'test session timeout';
+        if (conversationId && (forceTimeout || ShopAIChat.Session.isExpired())) {
+          ShopAIChat.Session.showTimeoutConfirmation(userMessage, chatInput, messagesContainer);
+          return;
+        }
+
+        ShopAIChat.Session.updateActivity();
+
         // Add user message to chat
         this.add(userMessage, 'user', messagesContainer);
 
@@ -753,6 +775,106 @@
     },
 
     /**
+     * Session lifecycle management: activity tracking and timeout confirmation
+     */
+    Session: {
+      TIMEOUT_MS: 15 * 60 * 1000,
+      ACTIVITY_KEY: 'shopAiLastActivity',
+
+      updateActivity: function() {
+        try { sessionStorage.setItem(this.ACTIVITY_KEY, Date.now().toString()); } catch { /* ignore */ }
+      },
+
+      isExpired: function() {
+        try {
+          const last = sessionStorage.getItem(this.ACTIVITY_KEY);
+          if (!last) return false;
+          return (Date.now() - parseInt(last, 10)) > this.TIMEOUT_MS;
+        } catch { return false; }
+      },
+
+      showTimeoutConfirmation: function(userMessage, chatInput, messagesContainer) {
+        chatInput.value = userMessage;
+
+        const confirmDiv = document.createElement('div');
+        confirmDiv.classList.add('shop-ai-message', 'assistant', 'shop-ai-session-timeout');
+        confirmDiv.innerHTML =
+          '<p>Your session has been inactive for a while. Would you like to continue where you left off, or start a new conversation?</p>' +
+          '<div class="shop-ai-session-buttons">' +
+            '<button class="shop-ai-session-continue">Continue Conversation</button>' +
+            '<button class="shop-ai-session-new">Start New Conversation</button>' +
+          '</div>' +
+          '<p class="shop-ai-session-hint">Tip: Type <strong>new chat</strong> on its own at any time to start a fresh conversation.</p>';
+
+        messagesContainer.appendChild(confirmDiv);
+        ShopAIChat.UI.scrollToBottom();
+
+        var self = this;
+
+        confirmDiv.querySelector('.shop-ai-session-continue').addEventListener('click', function() {
+          confirmDiv.remove();
+          self.updateActivity();
+          var conversationId = sessionStorage.getItem('shopAiConversationId');
+          ShopAIChat.Message.add(userMessage, 'user', messagesContainer);
+          chatInput.value = '';
+          ShopAIChat.UI.showTypingIndicator();
+          ShopAIChat.API.streamResponse(userMessage, conversationId, messagesContainer);
+        });
+
+        confirmDiv.querySelector('.shop-ai-session-new').addEventListener('click', function() {
+          confirmDiv.remove();
+          chatInput.value = '';
+          self.startNewSession(messagesContainer);
+        });
+      },
+
+      startNewSession: function(messagesContainer) {
+        sessionStorage.removeItem('shopAiConversationId');
+        this.updateActivity();
+        messagesContainer.innerHTML = '';
+        var welcomeMsg = window.shopChatConfig && window.shopChatConfig.welcomeMessage
+          ? window.shopChatConfig.welcomeMessage
+          : '👋 Hi there! How can I help you today?';
+        ShopAIChat.Message.add(welcomeMsg, 'assistant', messagesContainer);
+      },
+
+      showNewChatClarification: function(originalMessage, chatInput, messagesContainer) {
+        chatInput.value = originalMessage;
+
+        const clarifyDiv = document.createElement('div');
+        clarifyDiv.classList.add('shop-ai-message', 'assistant', 'shop-ai-session-timeout');
+        clarifyDiv.innerHTML =
+          '<p>It looks like your message includes "new chat." Did you want to clear your chat history and start a new conversation?</p>' +
+          '<div class="shop-ai-session-buttons">' +
+            '<button class="shop-ai-session-continue">No, send my full message</button>' +
+            '<button class="shop-ai-session-new">Yes, start a new chat</button>' +
+          '</div>' +
+          '<p class="shop-ai-session-hint">Tip: Type <strong>new chat</strong> on its own to start fresh without any extra wording.</p>';
+
+        messagesContainer.appendChild(clarifyDiv);
+        ShopAIChat.UI.scrollToBottom();
+
+        var self = this;
+        var conversationId = sessionStorage.getItem('shopAiConversationId');
+
+        clarifyDiv.querySelector('.shop-ai-session-continue').addEventListener('click', function() {
+          clarifyDiv.remove();
+          self.updateActivity();
+          ShopAIChat.Message.add(originalMessage, 'user', messagesContainer);
+          chatInput.value = '';
+          ShopAIChat.UI.showTypingIndicator();
+          ShopAIChat.API.streamResponse(originalMessage, conversationId, messagesContainer);
+        });
+
+        clarifyDiv.querySelector('.shop-ai-session-new').addEventListener('click', function() {
+          clarifyDiv.remove();
+          chatInput.value = '';
+          self.startNewSession(messagesContainer);
+        });
+      }
+    },
+
+    /**
      * Text formatting and markdown handling
      */
     Formatting: {
@@ -962,6 +1084,19 @@
             }
             break;
 
+          case 'new_session':
+            if (data.conversation_id) {
+              sessionStorage.setItem('shopAiConversationId', data.conversation_id);
+              ShopAIChat.Session.updateActivity();
+              // Clear the chat UI and show a fresh welcome message
+              messagesContainer.innerHTML = '';
+              const welcomeMsg = window.shopChatConfig?.welcomeMessage || "👋 Hi there! How can I help you today?";
+              ShopAIChat.Message.add(welcomeMsg, 'assistant', messagesContainer);
+              // Re-attach the current element so incoming chunk events still render
+              messagesContainer.appendChild(currentMessageElement);
+            }
+            break;
+
           case 'chunk':
             ShopAIChat.UI.removeTypingIndicator();
             currentMessageElement.dataset.rawText += data.chunk;
@@ -977,6 +1112,7 @@
 
           case 'end_turn':
             ShopAIChat.UI.removeTypingIndicator();
+            ShopAIChat.Session.updateActivity();
             break;
 
           case 'error':

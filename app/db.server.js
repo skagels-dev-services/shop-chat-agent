@@ -257,3 +257,19 @@ export async function getCustomerAccountUrls(conversationId) {
     return null;
   }
 }
+
+/**
+ * Get a conversation record by ID
+ * @param {string} conversationId - The conversation ID
+ * @returns {Promise<Object|null>} - The conversation or null if not found
+ */
+export async function getConversation(conversationId) {
+  try {
+    return await prisma.conversation.findUnique({
+      where: { id: conversationId }
+    });
+  } catch (error) {
+    console.error('Error retrieving conversation:', error);
+    return null;
+  }
+}
