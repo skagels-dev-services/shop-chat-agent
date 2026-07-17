@@ -1,1 +1,45 @@
-alias shopify-app-dev="shopify app dev --use-localhost --reset"
+alias shopify-app-dev-local="shopify app dev --use-localhost --reset"
+alias shopify-run-dev="shopify run dev"
+alias shopify-ps='ps ax | grep shopify | grep -v grep'
+alias shopify-ps-watch="watch -n5 \"ps ax | grep -e 'node ' | grep shopify | grep -v grep\""
+alias shopify-lsof='lsof_by_port 9293'
+alias shopify-lsof-watch='watch -n5 ". ./aliases && lsof_by_port 9293"'
+alias shopify-port-mon='watch -n5 ". ./aliases && update_shopify_mon"'
+
+
+function get_shopify_app_dev_pid() {
+  ps ax | grep "shopify app dev" | grep -v grep | awk '{print $1}'
+}
+
+function get_shopify_app_dev_react_router_pid() {
+  ps ax | grep node |grep "react-router" | grep -v grep | awk '{print $1}'
+}
+
+function lsof_by_port() {
+  local port=$1
+  lsof -nP -iTCP:"$port" | grep '(LISTEN)'
+}
+
+function lsof_by_pid() {
+  local pid=$1
+  [[ -n "$pid" ]] && lsof -p "$pid" -nP | grep '(LISTEN)'
+}
+
+export SHOPIFY_PORT_MON_LOG="$HOME/.shopify_portmon"
+
+function update_shopify_mon() {
+  local pid="$(get_shopify_app_dev_pid)"
+  local react_router_pid="$(get_shopify_app_dev_react_router_pid)"
+  local file=$SHOPIFY_PORT_MON_LOG
+
+  echo "# Shopify Port Monitor, Last Updated: $(date)" > "$file"
+  echo "" >> "$file"
+  echo "[shopify app dev] " >> "$file"
+  echo "$(lsof_by_pid $pid)" >> "$file"
+  echo "" >> "$file"
+  echo "[react-router] " >> "$file"
+  echo "$(lsof_by_pid $react_router_pid)" >> "$file"
+  echo "" >> "$file"
+  
+  cat "$file"
+}

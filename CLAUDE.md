@@ -6,6 +6,8 @@ This agent is an implementation of [@shopify-app](../README.md)
 
 Provide tech stack, architecture pattern, key dependencies.
 
+This git repository is a fork of [https://github.com/Shopify/shop-chat-agent.git]()
+
 ## Key Directories
 
 Provide the structure of the sub-project and where important files are located.
@@ -22,13 +24,12 @@ List core processes and how to run them.
 
 Example (replace single quotes with backticks):
 
-'''bash
+```Shell
+npm run dev    # Start development server
+npm run test   # Run tests
+npm run build  # Production build
+```
 
-- npm run dev    # Start development server
-- npm run test   # Run tests
-- npm run build  # Production build
-
-'''
 
 # Standards
 
