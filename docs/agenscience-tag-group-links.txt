@@ -1,0 +1,65 @@
+Agenscience
+
+Agenscience - Decision Intelligence & Optimization
+https://www.agenscience.ai/
+
+John Bible | LinkedIn
+https://www.linkedin.com/in/john-bible-13872677/
+
+(582) How to create a Shopify App - An overview - YouTube
+https://www.youtube.com/watch?v=PB9gwBgQIk0
+
+Introduction to Shopify
+https://www.shopifyacademy.com/introduction-to-shopify
+
+Dev stores
+https://shopify.dev/docs/apps/build/dev-dashboard/stores/development-stores
+
+Scaffold an app
+https://shopify.dev/docs/apps/build/scaffold-app
+
+A1 Outfitters · Edit test-data · Shopify
+https://admin.shopify.com/store/a1-outfitters-2/themes/151439016108/editor?context=apps&appEmbed=5c307ad556bb499314edfd281ab20290%2Fchat-interface
+
+A1 Outfitters · General · Shopify
+https://admin.shopify.com/store/a1-outfitters-2/settings/general
+
+Shopify Partners
+https://partners.shopify.com/4849692
+
+Shopify Help Center | Finding and choosing apps
+https://help.shopify.com/en/manual/apps/finding-choosing-apps#finding-an-app-outside-of-the-shopify-app-store
+
+Settings · shop-chat-agent · Dev Dashboard
+https://dev.shopify.com/dashboard/213423585/apps/353777942529/settings
+
+Build a Storefront AI agent
+https://shopify.dev/docs/apps/build/storefront-mcp/build-storefront-ai-agent?framework=reactRouter
+
+Shopify/shop-chat-agent: A reference app for storefront chat agent
+https://github.com/Shopify/shop-chat-agent
+
+Shopify shop-chat-agent Chat API Base URL - Google Search
+https://www.google.com/search?client=safari&rls=en&q=Shopify+shop-chat-agent+Chat+API+Base+URL&ie=UTF-8&oe=UTF-8
+
+About Storefront MCP
+https://shopify.dev/docs/apps/build/storefront-mcp
+
+Storefront MCP server
+https://shopify.dev/docs/apps/build/storefront-mcp/servers/storefront
+
+Overview - Universal Commerce Protocol (UCP)
+https://ucp.dev/specification/catalog/
+
+Settings · shop-customer-mgr · Dev Dashboard
+https://dev.shopify.com/dashboard/213423585/apps/360858320897/settings
+
+Customer Accounts MCP server
+https://shopify.dev/docs/apps/build/storefront-mcp/servers/customer-account
+
+Work with protected customer data
+https://shopify.dev/docs/apps/launch/protected-customer-data#requirements
+
+Shopify Partners
+https://partners.shopify.com/4849692/apps/360858320897/api_access
+
