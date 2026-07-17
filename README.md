@@ -1,3 +1,15 @@
+# skagels-dev-services fork
+
+**`main` branch is locked in this fork to keep it clean and synced with Shopify origin.**
+
+Base branch for development: `agenscience-main`
+
+All work should be done on or branch off of `agenscience-main`.
+
+For more information, please switch to `agenscience-main` branch.
+
+---
+
 # Build an AI Agent for Your Storefront
 
 A Shopify template app that lets you embed an AI-powered chat widget on your storefront. Shoppers can search for products, ask about policies or shipping, and complete purchases - all without leaving the conversation. Under the hood it speaks the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) to tap into Shopify’s APIs.
