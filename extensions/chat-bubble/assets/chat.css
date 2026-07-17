@@ -319,6 +319,20 @@
     align-items: center;
   }
 
+  .shop-ai-voice-status {
+    min-height: 18px;
+    padding: 4px 16px 0;
+    font-size: 12px;
+    color: #5046e4;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .shop-ai-voice-status.active {
+    opacity: 1;
+  }
+
   .shop-ai-chat-input input {
     flex: 1;
     padding: 12px 16px;
@@ -344,7 +358,8 @@
     border-color: #5046e4;
   }
 
-  .shop-ai-chat-send {
+  .shop-ai-chat-send,
+  .shop-ai-chat-voice {
     background-color: #5046e4;
     color: white;
     border: none;
@@ -355,6 +370,21 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
+  }
+
+  .shop-ai-chat-send:hover,
+  .shop-ai-chat-voice:hover {
+    transform: scale(1.04);
+  }
+
+  .shop-ai-chat-voice.recording {
+    background-color: #d63b3b;
+  }
+
+  .shop-ai-chat-voice:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .shop-ai-typing-indicator {
@@ -609,3 +639,84 @@
       transform: scale(1);
     }
   }
+
+/* Voice analysis consent notice */
+.shop-ai-voice-consent p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.shop-ai-consent-allow,
+.shop-ai-consent-deny {
+  display: inline-block;
+  margin: 2px 4px 0 0;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+}
+
+.shop-ai-consent-allow {
+  background: #5046e4;
+  color: #fff;
+}
+
+.shop-ai-consent-deny {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* Session timeout confirmation */
+.shop-ai-session-timeout p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.shop-ai-session-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.shop-ai-session-continue,
+.shop-ai-session-new {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+
+.shop-ai-session-continue {
+  background: #5046e4;
+  color: #fff;
+}
+
+.shop-ai-session-new {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.shop-ai-session-hint {
+  font-size: 11px !important;
+  color: #6b7280;
+  margin: 0 !important;
+  line-height: 1.5;
+}
+
+/* Divider shown when user starts a new session from the timeout prompt */
+.shop-ai-session-divider {
+  align-self: center;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+  width: 100%;
+  padding: 2px 0;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}

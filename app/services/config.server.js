@@ -27,6 +27,14 @@ export const AppConfig = {
   tools: {
     productSearchName: "search_shop_catalog",
     maxProductsToDisplay: 3
+  },
+
+  // Voice Analysis Configuration (Phase 3)
+  voice: {
+    enabled: process.env.VOICE_ANALYSIS_ENABLED === 'true',
+    provider: process.env.VOICE_PROVIDER || 'deepgram',       // 'deepgram' | 'assemblyai'
+    demographicsEnabled: process.env.VOICE_DEMOGRAPHICS_ENABLED === 'true',
+    maxAudioSeconds: 60,
   }
 };
 
