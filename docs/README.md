@@ -1,3 +1,18 @@
+# Docs Folder Contents
+
+- `agenscience-demo-tab-group-links.md` - links used during demo sessions
+- `agenscience-tag-group-links.txt` - additional important project links
+- `claude-session-OpenAI-vs-Antropic-APIs-2026-04-07.md` - Claude session comparing AI APIs
+- `notes.agensciencea.ai.md` - Notes from sessions (Scott & John)
+- `Shopify-chatbot-voice-in.mov` - short demo using chat bot
+- `tasks/` - task specs and implementation notes
+
+---
+
+# README.md
+
+---
+
 # Shopify App Demo
 
 Build/Demo - an eCommerce platform with backend machine learning capabilities, built as a Shopify App (if feasible).
@@ -117,7 +132,3 @@ This hits all the demo goals: agentic sales, real-time prompt generation, visibl
 ## Shopify  - Build Storefront AI Agent
 
 [https://shopify.dev/docs/apps/build/storefront-mcp/build-storefront-ai-agent?framework=reactRouter](https://shopify.dev/docs/apps/build/storefront-mcp/build-storefront-ai-agent?framework=reactRouter)
-
-## Shopify - shop-chat-agent
-
-See subdir `./shop-chat-agent`
